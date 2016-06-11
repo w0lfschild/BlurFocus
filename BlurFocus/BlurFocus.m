@@ -8,55 +8,34 @@
 
 @import AppKit;
 #import <QuartzCore/QuartzCore.h>
-
-typedef void * CGSConnection;
-extern OSStatus CGSSetWindowBackgroundBlurRadius(CGSConnection connection, NSInteger   windowNumber, int radius);
-extern CGSConnection CGSDefaultConnectionForThread();
+#import <objc/runtime.h>
 
 @interface BlurFocus : NSObject
 @end
 
 @implementation BlurFocus
 
-bool _filtersAdded = false;
-NSArray *_filters;
-
-CIFilter *_blurFilter, *_saturationFilter;
-float blurRadius;
-NSColor *tintColor;
+NSArray         *_filters;
+CIFilter        *_blurFilter;
+static void     *isActive = &isActive;
 
 + (void)load
 {
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wb_blurWindow:) name:NSWindowDidResignKeyNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wb_blurWindow:) name:NSWindowDidResignMainNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wb_restoreBlur:) name:NSWindowDidBecomeMainNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(wb_restoreBlur:) name:NSWindowDidBecomeKeyNotification object:nil];
-    NSLog(@"Grayifier loaded...");
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    [center addObserver:self selector:@selector(BF_blurWindow:) name:NSWindowDidResignKeyNotification object:nil];
+    [center addObserver:self selector:@selector(BF_blurWindow:) name:NSWindowDidResignMainNotification object:nil];
+    [center addObserver:self selector:@selector(BF_restoreWindow:) name:NSWindowDidBecomeMainNotification object:nil];
+    [center addObserver:self selector:@selector(BF_restoreWindow:) name:NSWindowDidBecomeKeyNotification object:nil];
+    NSLog(@"BlurFocus loaded...");
 }
 
-+ (void)wb_blurWindow:(NSNotification *)note
++ (void)BF_blurWindow:(NSNotification *)note
 {
-    if (!_filtersAdded) {
-        //        NSLog(@"Filter added");
-        //        Yes, apply grayscale filter
-        
-        //        CIFilter *filt = [CIFilter filterWithName:@"CIColorMonochrome"]; // CIImage
-        //        [filt setDefaults];
-        //        [filt setValue:[CIColor colorWithRed:.3 green:.3 blue:.3 alpha:1] forKey:@"inputColor"];
-        //
-        //        CIFilter *filt2 = [CIFilter filterWithName:@"CIGammaAdjust"]; // CIImage
-        //        [filt2 setDefaults];
-        //        [filt2 setValue:[NSNumber numberWithFloat:0.3] forKey:@"inputPower"];
-        //
-        NSWindow *win = note.object;
-        _filters = [[win.contentView superview] contentFilters];
-        //        [[win.contentView superview] setWantsLayer:YES];
-        //        [[win.contentView superview] setContentFilters:[NSArray arrayWithObjects:filt, filt2, nil]];
+    NSWindow *win = note.object;
+    if (![objc_getAssociatedObject(win, isActive) boolValue]) {
         
         NSView *_win = [[win contentView] superview];
-        
-        // Set up the default parameters
-        blurRadius = 1.0;
+        _filters = [_win contentFilters];
         
         // To apply CIFilters on OS X 10.9, we need to set the property accordingly:
         [_win setWantsLayer:YES];
@@ -68,7 +47,7 @@ NSColor *tintColor;
         // Next, we create the blur filter
         _blurFilter = [CIFilter filterWithName:@"CIGaussianBlur"];
         [_blurFilter setDefaults];
-        [_blurFilter setValue:[NSNumber numberWithFloat:blurRadius] forKey:@"inputRadius"];
+        [_blurFilter setValue:[NSNumber numberWithFloat:1.0] forKey:@"inputRadius"];
         
         // Now we apply the two filters as the layer's background filters
         [_win setContentFilters:@[_blurFilter]];
@@ -76,24 +55,23 @@ NSColor *tintColor;
         // ... and trigger a refresh
         [_win.layer setNeedsDisplay];
         
+        // Set alpha
         [win setAlphaValue:0.9];
         
-        _filtersAdded = !_filtersAdded;
+        // Set active flag for window
+        objc_setAssociatedObject(win, isActive, [NSNumber numberWithBool:true], OBJC_ASSOCIATION_RETAIN);
     }
 }
 
-+ (void)wb_restoreBlur:(NSNotification *)note
++ (void)BF_restoreWindow:(NSNotification *)note
 {
-    if (_filtersAdded) {
-        //        NSLog(@"Filter removed");
-        //        Yes, remove grayscale filter
-        
-        NSWindow *win = note.object;
+    NSWindow *win = note.object;
+    if ([objc_getAssociatedObject(win, isActive) boolValue]) {
         [[win.contentView superview] setWantsLayer:YES];
         [[win.contentView superview] setContentFilters:_filters];
         [win setViewsNeedDisplay:YES];
         [win setAlphaValue:1.0];
-        _filtersAdded = !_filtersAdded;
+        objc_setAssociatedObject(win, isActive, [NSNumber numberWithBool:false], OBJC_ASSOCIATION_RETAIN);
     }
 }
 
