@@ -10,66 +10,63 @@
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 
+NSArray* BF_addFilter(NSArray* gray, NSArray* def)
+{
+    NSMutableArray *newFilters = [[NSMutableArray alloc] initWithArray:def];
+    [newFilters addObjectsFromArray:gray];
+    NSArray *result = [newFilters copy];
+    return result;
+}
+
 @interface BlurFocus : NSObject
 @end
 
 @implementation BlurFocus
 
-NSArray         *_filters;
-CIFilter        *_blurFilter;
+NSArray         *_blurFilters;
+static void     *filterCache = &filterCache;
 static void     *isActive = &isActive;
 
 + (void)load
 {
-    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
-    [center addObserver:self selector:@selector(BF_blurWindow:) name:NSWindowDidResignKeyNotification object:nil];
-    [center addObserver:self selector:@selector(BF_blurWindow:) name:NSWindowDidResignMainNotification object:nil];
-    [center addObserver:self selector:@selector(BF_restoreWindow:) name:NSWindowDidBecomeMainNotification object:nil];
-    [center addObserver:self selector:@selector(BF_restoreWindow:) name:NSWindowDidBecomeKeyNotification object:nil];
-    NSLog(@"BlurFocus loaded...");
+    NSArray *blacklist = @[@"com.apple.notificationcenterui", @"com.google.chrome", @"com.google.chrome.canary"];
+    NSString *appID = [[NSBundle mainBundle] bundleIdentifier];
+    if (![blacklist containsObject:appID])
+    {
+        CIFilter *filt = [CIFilter filterWithName:@"CIGaussianBlur"];
+        [filt setDefaults];
+        [filt setValue:[NSNumber numberWithFloat:1.0] forKey:@"inputRadius"];
+        
+        _blurFilters = [NSArray arrayWithObjects:filt, nil];
+        
+        NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+        [center addObserver:self selector:@selector(BF_blurWindow:) name:NSWindowDidResignKeyNotification object:nil];
+        [center addObserver:self selector:@selector(BF_blurWindow:) name:NSWindowDidResignMainNotification object:nil];
+        [center addObserver:self selector:@selector(BF_clearWindow:) name:NSWindowDidBecomeMainNotification object:nil];
+        [center addObserver:self selector:@selector(BF_clearWindow:) name:NSWindowDidBecomeKeyNotification object:nil];
+        NSLog(@"BlurFocus loaded...");
+    }
 }
 
 + (void)BF_blurWindow:(NSNotification *)note
 {
     NSWindow *win = note.object;
     if (![objc_getAssociatedObject(win, isActive) boolValue]) {
-        
-        NSView *_win = [[win contentView] superview];
-        _filters = [_win contentFilters];
-        
-        // To apply CIFilters on OS X 10.9, we need to set the property accordingly:
-        [_win setWantsLayer:YES];
-        [_win setLayerUsesCoreImageFilters:YES];
-        
-        // Set the layer to redraw itself once it's size is changed
-        [_win.layer setNeedsDisplayOnBoundsChange:YES];
-        
-        // Next, we create the blur filter
-        _blurFilter = [CIFilter filterWithName:@"CIGaussianBlur"];
-        [_blurFilter setDefaults];
-        [_blurFilter setValue:[NSNumber numberWithFloat:1.0] forKey:@"inputRadius"];
-        
-        // Now we apply the two filters as the layer's background filters
-        [_win setContentFilters:@[_blurFilter]];
-        
-        // ... and trigger a refresh
-        [_win.layer setNeedsDisplay];
-        
-        // Set alpha
+        NSArray *_defaultFilters = [[win.contentView superview] contentFilters];
+        objc_setAssociatedObject(win, filterCache, _defaultFilters, OBJC_ASSOCIATION_RETAIN);
+        [[win.contentView superview] setWantsLayer:YES];
+        [[win.contentView superview] setContentFilters:BF_addFilter(_blurFilters, _defaultFilters)];
         [win setAlphaValue:0.9];
-        
-        // Set active flag for window
         objc_setAssociatedObject(win, isActive, [NSNumber numberWithBool:true], OBJC_ASSOCIATION_RETAIN);
     }
 }
 
-+ (void)BF_restoreWindow:(NSNotification *)note
++ (void)BF_clearWindow:(NSNotification *)note
 {
     NSWindow *win = note.object;
     if ([objc_getAssociatedObject(win, isActive) boolValue]) {
         [[win.contentView superview] setWantsLayer:YES];
-        [[win.contentView superview] setContentFilters:_filters];
-        [win setViewsNeedDisplay:YES];
+        [[win.contentView superview] setContentFilters:objc_getAssociatedObject(win, filterCache)];
         [win setAlphaValue:1.0];
         objc_setAssociatedObject(win, isActive, [NSNumber numberWithBool:false], OBJC_ASSOCIATION_RETAIN);
     }
