@@ -51,7 +51,8 @@ static void     *isActive = &isActive;
 + (void)BF_blurWindow:(NSNotification *)note
 {
     NSWindow *win = note.object;
-    if (![objc_getAssociatedObject(win, isActive) boolValue]) {
+    if (![objc_getAssociatedObject(win, isActive) boolValue]
+            && !([win styleMask] & NSWindowStyleMaskFullScreen)) {
         NSArray *_defaultFilters = [[win.contentView superview] contentFilters];
         objc_setAssociatedObject(win, filterCache, _defaultFilters, OBJC_ASSOCIATION_RETAIN);
         [[win.contentView superview] setWantsLayer:YES];
