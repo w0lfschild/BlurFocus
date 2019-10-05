@@ -5,16 +5,13 @@
 # Information:
 
 - Designed for 10.9+
-- SIMBL plugin to blur background windows on OS X
+- MacForge plugin to blur background windows on MacOS
 - Author: [w0lfschild](https://github.com/w0lfschild)
 
 # Installation:
 
-1. Download [mySIMBL](https://github.com/w0lfschild/app_updates/raw/master/mySIMBL/mySIMBL_master.zip)
-2. Download [BlurFocus](https://github.com/w0lfschild/BlurFocus/raw/master/build/BlurFocus.zip)
-3. Unzip downloads
-4. Open `BlurFocus.bundle` with `mySIMBL.app`
-5. Restart Chrome
+1. Download [MacForge](https://github.com/w0lfschild/app_updates/raw/master/MacForge/MacForge.zip)
+2. Install [BlurFocus](https://www.macenhance.com/mflink?macforge://github.com/w0lfschild/myRepo/raw/master/mytweaks/org.w0lf.BlurFocus)
 
 ### License:
 Pretty much the BSD license, just don't repackage it and call it your own please!    
